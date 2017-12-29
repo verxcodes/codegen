@@ -1,0 +1,16 @@
+# Verx codes YAML init file.
+
+# The directory in which to find and put your private and public keys
+key_directory: './.verxkeys'
+
+# The directory into which output barcode image files are placed:
+output_directory: './output'
+
+# The private key to use:
+private_key: private_ECDSA.key
+
+# The public key to use:
+public_key: public_ECDSA.key
+
+
+
