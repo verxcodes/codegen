@@ -13,8 +13,8 @@ import (
 	"runtime"
 
 	"github.com/davidsonff/qrand"
+	uuid "github.com/satori/go.uuid"
 	flag "github.com/spf13/pflag"
-
 	"github.com/spf13/viper"
 )
 
@@ -30,6 +30,11 @@ const (
 var config, keyPath, outPath, siteURL, jsonmsg string
 var count int
 var genKey, psuedo bool
+
+type Msg struct {
+	Url  String
+	UUID uuid.UUID
+}
 
 func init() {
 	flag.IntVar(&count, "count", 1, "The number of barcodes to generate.")
@@ -52,12 +57,13 @@ func main() {
 		os.Exit(ExitFSErr)
 	}
 
+	// Get the file system info together...
+	keyDir := viper.GetString("key_directory")
+	privFile := keyDir + string(os.PathSeparator) + viper.GetString("private_key")
+	pubFile := keyDir + string(os.PathSeparator) + viper.GetString("public_key")
+
+	// If generating key pair...
 	if genKey {
-
-		keyDir := viper.GetString("key_directory")
-
-		privFile := keyDir + string(os.PathSeparator) + viper.GetString("private_key")
-		pubFile := keyDir + string(os.PathSeparator) + viper.GetString("public_key")
 
 		// Checks to see if everything is ok with the directory and files...
 		if _, err := os.Stat(keyDir); os.IsNotExist(err) {
@@ -154,6 +160,9 @@ func main() {
 		fmt.Println("Successfully created the ECDSA key pair.")
 		os.Exit(NoError)
 	}
+
+	//Generate barcodes...
+
 }
 
 //Credit to Simon Waldherr... https://github.com/SimonWaldherr/golang-examples/blob/master/expert/ppk-crypto.go
