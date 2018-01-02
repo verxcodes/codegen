@@ -4,49 +4,78 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/x509"
+	"encoding/pem"
 	"fmt"
+	"image/png"
 	"io"
-	"math/big"
+	"io/ioutil"
 	"os"
 	"runtime"
 
+	"github.com/boombuler/barcode"
+	"github.com/boombuler/barcode/qr"
 	"github.com/davidsonff/qrand"
 	uuid "github.com/satori/go.uuid"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	jwt "github.com/verxcodes/jwt-go"
 )
 
 const (
 	NoError           = iota // No error. Normal exit
-	ExitNoPsuedo             // Had to use psuedo-random and allow-psuedo flag is set to false
+	ExitNoPseudo             // Had to use pseudo-random and allow-pseudo flag is set to false
 	ExitFSErr                // File system error
 	ExitUnexpectedErr        // Unexpected error
 	ExitNoOverwrite          // Don't overwrite an existing key!
 	ExitECDSAError           // Something went wrong encrypting things
+	ExitBarcodeError         // Problem creating the barcode image
+	ExitParamError           // Parameter error
 )
 
-var config, keyPath, outPath, siteURL, jsonmsg string
-var count int
-var genKey, psuedo bool
+var config, keyPath, outPath, addText, pseudo string
+var img_size int
+var genKey bool
+
+// Hopefully, comply with the European Union Directive 2011/62/EU:
+var productCode, serialNumber, batchNumber, expirationDate string
 
 type Msg struct {
-	Url  String
-	UUID uuid.UUID
+	Url        string    `json:"URL"`
+	UUID       uuid.UUID `json:"UUID"`
+	ProdCode   string    `json:"product_code"`
+	SerNum     string    `json:"serial_number"`
+	Batch      string    `json:"batch_number"`
+	Expiration string    `json:"expiration_date"`
+	OtherInfo  string    `json:"other_info"`
+	jwt.StandardClaims
 }
 
 func init() {
-	flag.IntVar(&count, "count", 1, "The number of barcodes to generate.")
-	flag.BoolVar(&genKey, "generate-key", false, "Generates a new key pair. Will not overwrite existing keys.")
-	flag.BoolVar(&psuedo, "allow-psuedo", true, "Allow Verx barcode generation with psuedo-random vector.")
-	flag.StringVar(&jsonmsg, "json-msg", "", "Additional user-specified JSON to include in barcode.")
+	flag.IntVar(&img_size, "image-size", 200, "The pixel size of both the height and width of the image. It's a square.")
+	flag.BoolVar(&genKey, "generate-keys", false, "Generates a new key pair. Will not overwrite existing keys.")
+	flag.StringVar(&pseudo, "allow-pseudo", "A", "Allow Verx barcode generation with pseudo-random vector. D - Disallow, A - Allow, F-Force")
+	flag.StringVar(&addText, "other-info", "", "Additional user-specified text to include in barcode. Keep it simple!")
 	flag.StringVar(&config, "config", ".", "The path to the YAML configuration file, verxinit.yml. Defaults to the working directory.")
+	flag.StringVar(&productCode, "product_code", "", "The product code of the product.")
+	flag.StringVar(&serialNumber, "serial_number", "", "The serial number of the product.")
+	flag.StringVar(&batchNumber, "batch_number", "", "The batch number of the product.")
+	flag.StringVar(&expirationDate, "expiration_date", "", "The expiration date of the product.")
 }
 
 func main() {
 
 	flag.Parse()
+
+	if len(productCode) > 50 { // European Union Directive 2011/62/EU
+		fmt.Println("Product code too long!")
+		os.Exit(ExitParamError)
+	}
+
+	if len(serialNumber) > 20 { // European Union Directive 2011/62/EU
+		fmt.Println("Serial number too long!")
+		os.Exit(ExitParamError)
+	}
 
 	viper.SetConfigName("verxinit")
 	viper.AddConfigPath(config)
@@ -90,10 +119,10 @@ func main() {
 		// Generate and save the keys...
 
 		// Get random vector for ECDSA...
-		rand, err := qrand.Get(56)                                 // Size 56 bytes for 384 bits for P384 curve - 384/8 + 8 = 56
-		if _, ok := err.(qrand.PsuedoRandomError); ok && !psuedo { // The true random number server is not reachable, so trying to fall back to crypto/rand. Don't allow if psuedo is set to false.
-			fmt.Println("Attempt to fall back to psuedo-random generation and allow-psuedo set to false. Exiting...")
-			os.Exit(ExitNoPsuedo)
+		rand, err := qrand.Get(56)                                       // Size 56 bytes for 384 bits for P384 curve - 384/8 + 8 = 56
+		if _, ok := err.(qrand.PseudoRandomError); ok && pseudo == "D" { // The true random number server is not reachable, so trying to fall back to crypto/rand. Don't allow if pseudo is set to false.
+			fmt.Println("Attempt to fall back to pseudo-random generation and allow-pseudo set to false. Exiting...")
+			os.Exit(ExitNoPseudo)
 		} else if err != nil {
 			fmt.Println("Unexpected error:", err)
 			os.Exit(ExitUnexpectedErr)
@@ -118,7 +147,9 @@ func main() {
 			}
 		}
 
-		_, err = prv.Write(privKey)
+		prvPem := pem.Block{"PRIVATE KEY", nil, privKey}
+
+		err = pem.Encode(prv, &prvPem)
 		if err != nil {
 			fmt.Println("Error creating the private key!", err)
 			os.Exit(ExitUnexpectedErr)
@@ -145,7 +176,9 @@ func main() {
 			}
 		}
 
-		_, err = pub.Write(pubKey)
+		pubPem := pem.Block{"PUBLIC KEY", nil, pubKey}
+
+		err = pem.Encode(pub, &pubPem)
 		if err != nil {
 			fmt.Println("Error creating the private key!", err)
 			os.Exit(ExitUnexpectedErr)
@@ -161,8 +194,70 @@ func main() {
 		os.Exit(NoError)
 	}
 
-	//Generate barcodes...
+	// Generate barcodes...
 
+	// Get private signing key...
+
+	prv, err := ioutil.ReadFile(privFile)
+	if err != nil {
+		fmt.Println("Error opening the private key!", err)
+		os.Exit(ExitFSErr)
+	}
+
+	prvBlk, _ := pem.Decode(prv)
+
+	private_key, err := x509.ParseECPrivateKey(prvBlk.Bytes)
+	if err != nil {
+		fmt.Println("Error parsing private key!", err)
+		os.Exit(ExitECDSAError)
+	}
+
+	// Create the JWT token...
+
+	msg := Msg{
+		viper.GetString("man_url"),
+		uuid.NewV4(),
+		productCode,
+		serialNumber,
+		batchNumber,
+		expirationDate,
+		addText,
+		jwt.StandardClaims{
+			Id:     "Verx",
+			Issuer: viper.GetString("issuer"),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodES384, msg)
+
+	// Sign and get the complete encoded token as a string using the secret
+	jwt.Pseudo = pseudo
+	tokenString, err := token.SignedString(private_key)
+
+	// Create QR code image
+	qrCode, err := qr.Encode(tokenString, qr.M, qr.Auto)
+	if err != nil {
+		fmt.Println("Error creating barcode!", err)
+		os.Exit(ExitBarcodeError)
+	}
+
+	// Scale the barcode pixel size
+	qrCode, err = barcode.Scale(qrCode, img_size, img_size)
+	if err != nil {
+		fmt.Println("Error creating barcode!", err)
+		os.Exit(ExitBarcodeError)
+	}
+
+	// create the output file
+	file, err := os.Create("qrcode.png")
+	if err != nil {
+		fmt.Println("Error creating barcode!", err)
+		os.Exit(ExitBarcodeError)
+	}
+	defer file.Close()
+
+	// encode the barcode as png
+	png.Encode(file, qrCode)
 }
 
 //Credit to Simon Waldherr... https://github.com/SimonWaldherr/golang-examples/blob/master/expert/ppk-crypto.go
@@ -188,32 +283,4 @@ func genPPKeys(random io.Reader) (private_key_bytes, public_key_bytes []byte) {
 	}
 
 	return private_key_bytes, public_key_bytes
-}
-
-func pkSign(hash []byte, private_key_bytes []byte) (r, s *big.Int, err error) {
-	zero := big.NewInt(0)
-	private_key, err := x509.ParseECPrivateKey(private_key_bytes)
-	if err != nil {
-		return zero, zero, err
-	}
-
-	r, s, err = ecdsa.Sign(rand.Reader, private_key, hash)
-	if err != nil {
-		return zero, zero, err
-	}
-	return r, s, nil
-}
-
-func pkVerify(hash []byte, public_key_bytes []byte, r *big.Int, s *big.Int) (result bool) {
-	public_key, err := x509.ParsePKIXPublicKey(public_key_bytes)
-	if err != nil {
-		return false
-	}
-
-	switch public_key := public_key.(type) {
-	case *ecdsa.PublicKey:
-		return ecdsa.Verify(public_key, hash, r, s)
-	default:
-		return false
-	}
 }

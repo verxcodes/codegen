@@ -6,11 +6,16 @@ key_directory: './.verxkeys'
 # The directory into which output barcode image files are placed:
 output_directory: './output'
 
-# The private key to use:
-private_key: private_ECDSA.key
+# Your organization's private key to use, PEM format:
+private_key: private_key.pem
 
-# The public key to use:
-public_key: public_ECDSA.key
+# Your organization's public key to use, PEM format:
+public_key: public_key.pem
 
+# The issuer of the JWT. Should be a short string identifying your organization, the manufacturer"
+issuer: verx
 
+# The your organization's publicly available, HTTPS URL enpoint to verify your public key. The PEM encoded public key must be the body of the https GET request received by the end users.
+# The digital certificate of the endpoint will be validated with its corresponding certificate authority.
+man_url: https://verx.codes/public_key.pem
 
