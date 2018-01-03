@@ -43,19 +43,19 @@ var productCode, serialNumber, batchNumber, expirationDate string
 type Msg struct {
 	Url        string    `json:"URL"`
 	UUID       uuid.UUID `json:"UUID"`
-	ProdCode   string    `json:"product_code"`
-	SerNum     string    `json:"serial_number"`
-	Batch      string    `json:"batch_number"`
-	Expiration string    `json:"expiration_date"`
-	OtherInfo  string    `json:"other_info"`
+	ProdCode   string    `json:"prd"`
+	SerNum     string    `json:"ser"`
+	Batch      string    `json:"batch"`
+	Expiration string    `json:"expires"` // StandardClaims already have exp for ExpiresAt
+	OtherInfo  string    `json:"other"`
 	jwt.StandardClaims
 }
 
 func init() {
-	flag.IntVar(&img_size, "image-size", 200, "The pixel size of both the height and width of the image. It's a square.")
-	flag.BoolVar(&genKey, "generate-keys", false, "Generates a new key pair. Will not overwrite existing keys.")
-	flag.StringVar(&pseudo, "allow-pseudo", "A", "Allow Verx barcode generation with pseudo-random vector. D - Disallow, A - Allow, F-Force")
-	flag.StringVar(&addText, "other-info", "", "Additional user-specified text to include in barcode. Keep it simple!")
+	flag.IntVar(&img_size, "image_size", 200, "The pixel size of both the height and width of the image. It's a square.")
+	flag.BoolVar(&genKey, "generate_keys", false, "Generates a new key pair. Will not overwrite existing keys.")
+	flag.StringVar(&pseudo, "allow_pseudo", "A", "Allow Verx barcode generation with pseudo-random vector. D - Disallow, A - Allow, F-Force")
+	flag.StringVar(&addText, "other_info", "", "Additional user-specified text to include in barcode. Keep it simple!")
 	flag.StringVar(&config, "config", ".", "The path to the YAML configuration file, verxinit.yml. Defaults to the working directory.")
 	flag.StringVar(&productCode, "product_code", "", "The product code of the product.")
 	flag.StringVar(&serialNumber, "serial_number", "", "The serial number of the product.")
