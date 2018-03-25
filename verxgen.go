@@ -214,9 +214,15 @@ func main() {
 
 	// Create the JWT token...
 
+	nUUID, err := uuid.NewV4()
+	if err != nil {
+		fmt.Println("There has been an entropy error. Please try again.")
+			panic(err)
+		}
+	
 	msg := Msg{
 		viper.GetString("man_url"),
-		uuid.NewV4(),
+		nUUID,
 		productCode,
 		serialNumber,
 		batchNumber,
