@@ -19,7 +19,7 @@ import (
 	uuid "github.com/satori/go.uuid"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	jwt "github.com/verxcodes/jwt-go"
+	jwt "github.com/dgrijalva/jwt-go"
 )
 
 const (
@@ -237,7 +237,7 @@ func main() {
 	token := jwt.NewWithClaims(jwt.SigningMethodES384, msg)
 
 	// Sign and get the complete encoded token as a string using the secret
-	jwt.Pseudo = pseudo
+
 	tokenString, err := token.SignedString(private_key)
 
 	// Create QR code image
