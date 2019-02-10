@@ -13,9 +13,9 @@ private_key: private_key.pem
 public_key: public_key.pem
 
 # The issuer of the JWT. Should be a short string identifying your organization, the manufacturer"
-issuer: verx
+issuer: myorg
 
 # The your organization's publicly available, HTTPS URL enpoint to verify your public key. The PEM encoded public key must be the body of the https GET request received by the end users.
 # The digital certificate of the endpoint will be validated with its corresponding certificate authority.
-man_url: https://verx.codes/public_key.pem
+man_url: https://myorg.org/public_key.pem
 
