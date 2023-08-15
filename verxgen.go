@@ -19,7 +19,7 @@ import (
 	uuid "github.com/satori/go.uuid"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
-	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt"
 )
 
 const (
